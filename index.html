@@ -3,12 +3,12 @@
 <head>
     <title>Leaflet Draw Example with Multiple Layers</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, minimum-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <style>
         #map {
-            height: 600px;
+            height: 100vh;
         }
         #downloadButton {
             position: absolute;
@@ -37,10 +37,10 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         });
 
-        var satellite =L.tileLayer('http://{s}.google.com/vt?lyrs=s&x={x}&y={y}&z={z}',{
-    maxZoom: 20,
-    subdomains:['mt0','mt1','mt2','mt3']
-});
+        var satellite = L.tileLayer('http://{s}.google.com/vt?lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
 
         var terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             attribution: 'Map data: &copy; <a href="https://www.opentopomap.org/">OpenTopoMap</a> contributors'
@@ -50,7 +50,11 @@
         var map = L.map('map', {
             center: [24, 75],
             zoom: 13,
-            layers: [streets] // Default layer
+            layers: [streets], // Default layer
+            tap: false, // To improve mobile interaction
+            touchZoom: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true
         });
 
         // Base layers object
@@ -109,6 +113,22 @@
 
         // Add event listener to the download button
         document.getElementById('downloadButton').addEventListener('click', downloadGeoJSON);
+
+        // Enable map interaction when not drawing
+        map.on('draw:drawstart', function () {
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.doubleClickZoom.disable();
+            map.scrollWheelZoom.disable();
+        });
+
+        // Re-enable map interaction after drawing
+        map.on('draw:drawstop', function () {
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.scrollWheelZoom.enable();
+        });
     </script>
 </body>
 </html>
