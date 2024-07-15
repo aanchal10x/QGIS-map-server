@@ -54,12 +54,14 @@
 </head>
 <body>
     <div id="map"></div>
+    <a class="leaflet-draw-draw-polyline" href="#" title="Draw a polyline"><span class="sr-only">Draw a polyline</span></a>
+
     <button id="downloadButton">Download GeoJSON</button>
     <div id="panUp" class="pan-control">↑</div>
     <div id="panDown" class="pan-control">↓</div>
     <div id="panLeft" class="pan-control">←</div>
     <div id="panRight" class="pan-control">→</div>
-
+    
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -104,6 +106,8 @@
         var drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
+        var selectedLayer = null; // Variable to store the selected polygon layer
+
         // Initialize the draw control and pass it the FeatureGroup of editable layers
         var drawControl = new L.Control.Draw({
             edit: {
@@ -112,23 +116,66 @@
         });
         map.addControl(drawControl);
 
+        // Function to add a marker at the center of the polygon
+        function addCenterMarker(layer) {
+            var center = layer.getBounds().getCenter();
+            var marker = L.marker(center).addTo(map);
+            layer.marker = marker;
+        }
+
+        // Function to remove the marker associated with a layer
+        function removeCenterMarker(layer) {
+            if (layer.marker) {
+                map.removeLayer(layer.marker);
+                layer.marker = null; // Clear the marker reference
+            }
+        }
+
+        // Function to reset the color of a layer to the default
+        function resetLayerColor(layer) {
+            layer.setStyle({ color: '#3388ff' });
+        }
+
         // Event when a new layer is created
         map.on(L.Draw.Event.CREATED, function (event) {
             var layer = event.layer;
             drawnItems.addLayer(layer);
+            addCenterMarker(layer);
 
-            // Add click event to the new layer
+            // Change color to light orange when the layer is selected
             layer.on('click', function () {
+                if (selectedLayer) {
+                    resetLayerColor(selectedLayer); // Reset previously selected layer color
+                }
+                selectedLayer = layer;
+                layer.setStyle({ color: 'orange' });
+
+                // Show GeoJSON data in a popup
                 var geojson = layer.toGeoJSON();
                 var geojsonString = JSON.stringify(geojson, null, 2);
-
-                // Create a popup and set its content to the GeoJSON string
                 var popup = L.popup()
                     .setLatLng(layer.getBounds().getCenter())
                     .setContent('<pre>' + geojsonString + '</pre>');
-
-                // Open the popup
                 layer.bindPopup(popup).openPopup();
+            });
+
+            // Deselect the layer when popup is closed
+            layer.on('popupclose', function () {
+                if (selectedLayer === layer) {
+                    resetLayerColor(layer);
+                    selectedLayer = null;
+                }
+            });
+        });
+
+        // Event when layers are deleted
+        map.on(L.Draw.Event.DELETED, function (event) {
+            event.layers.eachLayer(function (layer) {
+                removeCenterMarker(layer);
+                if (selectedLayer && selectedLayer === layer) {
+                    selectedLayer = null; // Clear selectedLayer if it's deleted
+                }
+                drawnItems.removeLayer(layer);
             });
         });
 
@@ -147,56 +194,50 @@
         // Add event listener to the download button
         document.getElementById('downloadButton').addEventListener('click', downloadGeoJSON);
 
-        // Pan the map in the desired direction
-        function panMap(dx, dy) {
-            var currentCenter = map.getCenter();
-            var newLat = currentCenter.lat + dy;
-            var newLng = currentCenter.lng + dx;
-            map.setView([newLat, newLng], map.getZoom());
-        }
-
-        // Attach event listeners to the pan control buttons
-        document.getElementById('panUp').addEventListener('click', function () {
-            panMap(0, 0.01);
-        });
-        document.getElementById('panDown').addEventListener('click', function () {
-            panMap(0, -0.01);
-        });
-        document.getElementById('panLeft').addEventListener('click', function () {
-            panMap(-0.01, 0);
-        });
-        document.getElementById('panRight').addEventListener('click', function () {
-            panMap(0.01, 0);
-        });
-
-        // Custom map handling to allow panning while drawing
-        var enableMapInteraction = function () {
-            map.dragging.enable();
-            map.touchZoom.enable();
-            map.scrollWheelZoom.enable();
-        };
-
-        var disableMapInteraction = function () {
+        // Enable map interaction when not drawing
+        map.on('draw:drawstart', function () {
             map.dragging.disable();
             map.touchZoom.disable();
+            map.doubleClickZoom.disable();
             map.scrollWheelZoom.disable();
-        };
+            document.querySelectorAll('.pan-control').forEach(control => control.style.display = 'block');
+        });
 
-        // Attach the custom handlers to the drawing events
-        map.on(L.Draw.Event.DRAWSTART, function () {
-            disableMapInteraction();
-            document.getElementById('panUp').style.display = 'block';
-            document.getElementById('panDown').style.display = 'block';
-            document.getElementById('panLeft').style.display = 'block';
-            document.getElementById('panRight').style.display = 'block';
+        // Re-enable map interaction after drawing
+        map.on('draw:drawstop', function () {
+            map.dragging.enable();
+            map.touchZoom.enable();
+            map.doubleClickZoom.enable();
+            map.scrollWheelZoom.enable();
+            document.querySelectorAll('.pan-control').forEach(control => control.style.display = 'none');
         });
-        map.on(L.Draw.Event.DRAWSTOP, function () {
-            enableMapInteraction();
-            document.getElementById('panUp').style.display = 'none';
-            document.getElementById('panDown').style.display = 'none';
-            document.getElementById('panLeft').style.display = 'none';
-            document.getElementById('panRight').style.display = 'none';
-        });
+
+        // Pan map functions
+        function panMap(direction) {
+            var panOffset = 100; // Adjust the pan offset as needed
+            var pan;
+            switch (direction) {
+                case 'up':
+                    pan = [0, -panOffset];
+                    break;
+                case 'down':
+                    pan = [0, panOffset];
+                    break;
+                case 'left':
+                    pan = [-panOffset, 0];
+                    break;
+                case 'right':
+                    pan = [panOffset, 0];
+                    break;
+            }
+            map.panBy(pan);
+        }
+
+        // Add event listeners for pan controls
+        document.getElementById('panUp').addEventListener('click', function () { panMap('up'); });
+        document.getElementById('panDown').addEventListener('click', function () { panMap('down'); });
+        document.getElementById('panLeft').addEventListener('click', function () { panMap('left'); });
+        document.getElementById('panRight').addEventListener('click', function () { panMap('right'); });
     </script>
 </body>
 </html>
