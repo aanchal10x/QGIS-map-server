@@ -21,11 +21,44 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        .pan-control {
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            padding: 5px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #panUp {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #panDown {
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #panLeft {
+            top: 50%;
+            left: 10px;
+            transform: translateY(-50%);
+        }
+        #panRight {
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <button id="downloadButton">Download GeoJSON</button>
+    <div id="panUp" class="pan-control">↑</div>
+    <div id="panDown" class="pan-control">↓</div>
+    <div id="panLeft" class="pan-control">←</div>
+    <div id="panRight" class="pan-control">→</div>
 
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
@@ -114,20 +147,55 @@
         // Add event listener to the download button
         document.getElementById('downloadButton').addEventListener('click', downloadGeoJSON);
 
-        // Enable map interaction when not drawing
-        map.on('draw:drawstart', function () {
-            map.dragging.disable();
-            map.touchZoom.disable();
-            map.doubleClickZoom.disable();
-            map.scrollWheelZoom.disable();
+        // Pan the map in the desired direction
+        function panMap(dx, dy) {
+            var currentCenter = map.getCenter();
+            var newLat = currentCenter.lat + dy;
+            var newLng = currentCenter.lng + dx;
+            map.setView([newLat, newLng], map.getZoom());
+        }
+
+        // Attach event listeners to the pan control buttons
+        document.getElementById('panUp').addEventListener('click', function () {
+            panMap(0, 0.01);
+        });
+        document.getElementById('panDown').addEventListener('click', function () {
+            panMap(0, -0.01);
+        });
+        document.getElementById('panLeft').addEventListener('click', function () {
+            panMap(-0.01, 0);
+        });
+        document.getElementById('panRight').addEventListener('click', function () {
+            panMap(0.01, 0);
         });
 
-        // Re-enable map interaction after drawing
-        map.on('draw:drawstop', function () {
+        // Custom map handling to allow panning while drawing
+        var enableMapInteraction = function () {
             map.dragging.enable();
             map.touchZoom.enable();
-            map.doubleClickZoom.enable();
             map.scrollWheelZoom.enable();
+        };
+
+        var disableMapInteraction = function () {
+            map.dragging.disable();
+            map.touchZoom.disable();
+            map.scrollWheelZoom.disable();
+        };
+
+        // Attach the custom handlers to the drawing events
+        map.on(L.Draw.Event.DRAWSTART, function () {
+            disableMapInteraction();
+            document.getElementById('panUp').style.display = 'block';
+            document.getElementById('panDown').style.display = 'block';
+            document.getElementById('panLeft').style.display = 'block';
+            document.getElementById('panRight').style.display = 'block';
+        });
+        map.on(L.Draw.Event.DRAWSTOP, function () {
+            enableMapInteraction();
+            document.getElementById('panUp').style.display = 'none';
+            document.getElementById('panDown').style.display = 'none';
+            document.getElementById('panLeft').style.display = 'none';
+            document.getElementById('panRight').style.display = 'none';
         });
     </script>
 </body>
