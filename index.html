@@ -1,71 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Leaflet Draw Example with Multiple Layers</title>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, minimum-scale=1">
+    <title>Leaflet Draw Example with Functional Custom Controls</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <style>
-        #map {
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        .map-container {
+            display: flex;
             height: 100vh;
         }
-        #downloadButton {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            z-index: 1000;
-            background-color: white;
+        #map {
+            flex-grow: 1;
+        }
+        #custom-controls {
+            width: 200px;
+            padding: 20px;
+            background-color: #f8f8f8;
+            overflow-y: auto;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        .control-group h3 {
+            margin-top: 0;
+        }
+        button {
+            display: block;
+            width: 100%;
             padding: 10px;
-            border: 2px solid #ccc;
+            margin-bottom: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
             border-radius: 4px;
             cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
         }
         .pan-control {
-            position: absolute;
-            z-index: 1000;
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
             background-color: white;
-            padding: 5px;
-            border: 2px solid #ccc;
+            border: 1px solid #ccc;
             border-radius: 4px;
             cursor: pointer;
+            margin: 2px;
         }
-        #panUp {
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        #panDown {
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        #panLeft {
-            top: 50%;
-            left: 10px;
-            transform: translateY(-50%);
-        }
-        #panRight {
-            top: 50%;
-            right: 10px;
-            transform: translateY(-50%);
+        .pan-control:hover {
+            background-color: #f0f0f0;
         }
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    <a class="leaflet-draw-draw-polyline" href="#" title="Draw a polyline"><span class="sr-only">Draw a polyline</span></a>
+    <div class="map-container">
+        <div id="map"></div>
+        <div id="custom-controls">
+            <div class="control-group">
+                <h3>Map Controls</h3>
+                <button id="zoomInButton">Zoom In</button>
+                <button id="zoomOutButton">Zoom Out</button>
+                <select id="layerSelect">
+                    <option value="streets">Streets</option>
+                    <option value="satellite">Satellite</option>
+                    <option value="terrain">Terrain</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <h3>Draw Controls</h3>
+                <button id="drawPolygon">Draw Polygon</button>
+                <button id="drawRectangle">Draw Rectangle</button>
+                <button id="drawMarker">Draw Marker</button>
+                <button id="editLayers">Edit Layers</button>
+                <button id="deleteLayers">Delete Layers</button>
+            </div>
+            <div class="control-group">
+                <h3>Pan Controls</h3>
+                <div id="panUp" class="pan-control">↑</div>
+                <div id="panDown" class="pan-control">↓</div>
+                <div id="panLeft" class="pan-control">←</div>
+                <div id="panRight" class="pan-control">→</div>
+            </div>
+            <div class="control-group">
+                <button id="downloadButton">Download GeoJSON</button>
+            </div>
+        </div>
+    </div>
 
-    <button id="downloadButton">Download GeoJSON</button>
-    <div id="panUp" class="pan-control">↑</div>
-    <div id="panDown" class="pan-control">↓</div>
-    <div id="panLeft" class="pan-control">←</div>
-    <div id="panRight" class="pan-control">→</div>
-    
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
     <script>
         // Initialize the base layers
         var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -85,72 +118,92 @@
         var map = L.map('map', {
             center: [24, 75],
             zoom: 13,
-            layers: [streets], // Default layer
-            tap: false, // To improve mobile interaction
-            touchZoom: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true
+            layers: [streets],
+            zoomControl: false
         });
 
         // Base layers object
         var baseLayers = {
-            "Streets": streets,
-            "Satellite": satellite,
-            "Terrain": terrain
+            "streets": streets,
+            "satellite": satellite,
+            "terrain": terrain
         };
-
-        // Add the base layers to the map
-        L.control.layers(baseLayers).addTo(map);
 
         // Initialize the FeatureGroup to store editable layers
         var drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        var selectedLayer = null; // Variable to store the selected polygon layer
+        var selectedLayer = null;
 
-        // Initialize the draw control and pass it the FeatureGroup of editable layers
+        // Initialize draw control
         var drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: drawnItems
+            },
+            draw: {
+                polygon: true,
+                rectangle: true,
+                circle: false,
+                circlemarker: false,
+                marker: true,
+                polyline: false
             }
         });
-        map.addControl(drawControl);
 
-        // Function to add a marker at the center of the polygon
-        function addCenterMarker(layer) {
-            var center = layer.getBounds().getCenter();
-            var marker = L.marker(center).addTo(map);
-            layer.marker = marker;
-        }
+        // Custom control functions
+        document.getElementById('zoomInButton').addEventListener('click', function() {
+            map.zoomIn();
+        });
 
-        // Function to remove the marker associated with a layer
-        function removeCenterMarker(layer) {
-            if (layer.marker) {
-                map.removeLayer(layer.marker);
-                layer.marker = null; // Clear the marker reference
-            }
-        }
+        document.getElementById('zoomOutButton').addEventListener('click', function() {
+            map.zoomOut();
+        });
 
-        // Function to reset the color of a layer to the default
-        function resetLayerColor(layer) {
-            layer.setStyle({ color: '#3388ff' });
-        }
+        document.getElementById('layerSelect').addEventListener('change', function(e) {
+            map.removeLayer(streets);
+            map.removeLayer(satellite);
+            map.removeLayer(terrain);
+            map.addLayer(baseLayers[e.target.value]);
+        });
+
+        document.getElementById('drawPolygon').addEventListener('click', function() {
+            new L.Draw.Polygon(map).enable();
+        });
+
+        document.getElementById('drawRectangle').addEventListener('click', function() {
+            new L.Draw.Rectangle(map).enable();
+        });
+
+        document.getElementById('drawMarker').addEventListener('click', function() {
+            new L.Draw.Marker(map).enable();
+        });
+
+        document.getElementById('editLayers').addEventListener('click', function() {
+            var editHandler = new L.EditToolbar.Edit(map, {
+                featureGroup: drawnItems
+            });
+            editHandler.enable();
+        });
+
+        document.getElementById('deleteLayers').addEventListener('click', function() {
+            var deleteHandler = new L.EditToolbar.Delete(map, {
+                featureGroup: drawnItems
+            });
+            deleteHandler.enable();
+        });
 
         // Event when a new layer is created
         map.on(L.Draw.Event.CREATED, function (event) {
             var layer = event.layer;
             drawnItems.addLayer(layer);
-            addCenterMarker(layer);
 
-            // Change color to light orange when the layer is selected
             layer.on('click', function () {
                 if (selectedLayer) {
-                    resetLayerColor(selectedLayer); // Reset previously selected layer color
+                    selectedLayer.setStyle({ color: '#3388ff' });
                 }
                 selectedLayer = layer;
                 layer.setStyle({ color: 'orange' });
 
-                // Show GeoJSON data in a popup
                 var geojson = layer.toGeoJSON();
                 var geojsonString = JSON.stringify(geojson, null, 2);
                 var popup = L.popup()
@@ -159,23 +212,11 @@
                 layer.bindPopup(popup).openPopup();
             });
 
-            // Deselect the layer when popup is closed
             layer.on('popupclose', function () {
                 if (selectedLayer === layer) {
-                    resetLayerColor(layer);
+                    layer.setStyle({ color: '#3388ff' });
                     selectedLayer = null;
                 }
-            });
-        });
-
-        // Event when layers are deleted
-        map.on(L.Draw.Event.DELETED, function (event) {
-            event.layers.eachLayer(function (layer) {
-                removeCenterMarker(layer);
-                if (selectedLayer && selectedLayer === layer) {
-                    selectedLayer = null; // Clear selectedLayer if it's deleted
-                }
-                drawnItems.removeLayer(layer);
             });
         });
 
@@ -194,27 +235,9 @@
         // Add event listener to the download button
         document.getElementById('downloadButton').addEventListener('click', downloadGeoJSON);
 
-        // Enable map interaction when not drawing
-        map.on('draw:drawstart', function () {
-            map.dragging.disable();
-            map.touchZoom.disable();
-            map.doubleClickZoom.disable();
-            map.scrollWheelZoom.disable();
-            document.querySelectorAll('.pan-control').forEach(control => control.style.display = 'block');
-        });
-
-        // Re-enable map interaction after drawing
-        map.on('draw:drawstop', function () {
-            map.dragging.enable();
-            map.touchZoom.enable();
-            map.doubleClickZoom.enable();
-            map.scrollWheelZoom.enable();
-            document.querySelectorAll('.pan-control').forEach(control => control.style.display = 'none');
-        });
-
         // Pan map functions
         function panMap(direction) {
-            var panOffset = 100; // Adjust the pan offset as needed
+            var panOffset = 100;
             var pan;
             switch (direction) {
                 case 'up':
