@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, minimum-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaflet Draw Example with Functional Custom Controls</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
@@ -92,7 +92,7 @@
                 <div id="panRight" class="pan-control">→</div>
             </div>
             <div class="control-group">
-                <button id="downloadButton">Download GeoJSON</button>
+                <button id="downloadButton">Download Selected GeoJSON</button>
             </div>
         </div>
     </div>
@@ -134,6 +134,7 @@
         map.addLayer(drawnItems);
 
         var selectedLayer = null;
+        var deleteHandler = null;
 
         // Initialize draw control
         var drawControl = new L.Control.Draw({
@@ -186,10 +187,22 @@
         });
 
         document.getElementById('deleteLayers').addEventListener('click', function() {
-            var deleteHandler = new L.EditToolbar.Delete(map, {
-                featureGroup: drawnItems
-            });
-            deleteHandler.enable();
+            if (deleteHandler) {
+                deleteHandler.disable();
+                deleteHandler = null;
+            } else {
+                deleteHandler = new L.EditToolbar.Delete(map, {
+                    featureGroup: drawnItems,
+                    callback: function () {
+                        // Check if all layers are deleted
+                        if (drawnItems.getLayers().length === 0) {
+                            deleteHandler.disable();
+                            deleteHandler = null;
+                        }
+                    }
+                });
+                deleteHandler.enable();
+            }
         });
 
         // Event when a new layer is created
@@ -220,20 +233,34 @@
             });
         });
 
-        // Function to download data as GeoJSON file
-        function downloadGeoJSON() {
-            var data = drawnItems.toGeoJSON();
-            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
-            var downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "data.geojson");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
+        // Function to download selected data as GeoJSON file
+        function downloadSelectedGeoJSON() {
+            var selectedLayers = [];
+            drawnItems.eachLayer(function (layer) {
+                if (layer === selectedLayer) {
+                    selectedLayers.push(layer.toGeoJSON());
+                }
+            });
+
+            if (selectedLayers.length > 0) {
+                var data = {
+                    type: 'FeatureCollection',
+                    features: selectedLayers
+                };
+                var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+                var downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "selected_data.geojson");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            } else {
+                alert('No selected areas to download.');
+            }
         }
 
         // Add event listener to the download button
-        document.getElementById('downloadButton').addEventListener('click', downloadGeoJSON);
+        document.getElementById('downloadButton').addEventListener('click', downloadSelectedGeoJSON);
 
         // Pan map functions
         function panMap(direction) {
